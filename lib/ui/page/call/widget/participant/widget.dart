@@ -17,11 +17,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:medea_jason/medea_jason.dart';
 
 import '../../controller.dart';
 import '../call_cover.dart';
 import '../raised_hand.dart';
 import '../video_view.dart';
+import '../zoomable_video_view.dart';
 import '/config.dart';
 import '/domain/model/ongoing_call.dart';
 import '/themes.dart';
@@ -107,8 +109,8 @@ class ParticipantWidget extends StatelessWidget {
                     : const Duration(seconds: 1),
                 child: !hasVideo
                     ? Container()
-                    : RtcVideoView(
-                        participant.video.value!.renderer.value
+                    : ZoomableVideoView(
+                        renderer: participant.video.value!.renderer.value
                             as RtcVideoRenderer,
                         source: participant.source,
                         key: participant.videoKey,
@@ -122,6 +124,7 @@ class ParticipantWidget extends StatelessWidget {
                         respectAspectRatio: respectAspectRatio,
                         offstageUntilDetermined: offstageUntilDetermined,
                         framelessBuilder: () => Stack(children: background()),
+                        enableZoom: participant.source == MediaSourceKind.display,
                       ),
               ),
               Obx(() {

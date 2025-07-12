@@ -23,6 +23,7 @@ import '/domain/model/ongoing_call.dart';
 import '/l10n/l10n.dart';
 import '/themes.dart';
 import '/ui/page/call/widget/video_view.dart';
+import '/ui/page/call/widget/zoomable_video_view.dart';
 import '/ui/widget/modal_popup.dart';
 import '/ui/widget/primary_button.dart';
 import '/ui/widget/progress_indicator.dart';
@@ -88,8 +89,8 @@ class ScreenShareView extends StatelessWidget {
                           height: videoHeight,
                           child: c.renderers[e] != null
                               ? Center(
-                                  child: RtcVideoView(
-                                    c.renderers[e]!,
+                                  child: ZoomableVideoView(
+                                    renderer: c.renderers[e]!,
                                     border: c.selected.value == e
                                         ? Border.all(
                                             color: style.colors.primary,
@@ -102,6 +103,7 @@ class ScreenShareView extends StatelessWidget {
                                     respectAspectRatio: true,
                                     framelessBuilder: () => framelessBuilder,
                                     borderRadius: BorderRadius.circular(10),
+                                    enableZoom: true,
                                   ),
                                 )
                               : framelessBuilder,
