@@ -60,6 +60,7 @@ import '/util/fixed_timer.dart';
 import '/util/message_popup.dart';
 import '/util/platform_utils.dart';
 import 'animated_offset.dart';
+import 'audio_player.dart';
 import 'chat_gallery.dart';
 import 'data_attachment.dart';
 import 'media_attachment.dart';
@@ -327,6 +328,21 @@ class ChatItemWidget extends StatefulWidget {
     void Function(FileAttachment)? onFileTap,
   }) {
     return DataAttachment(
+      e,
+      onPressed: () {
+        if (e is FileAttachment) {
+          onFileTap?.call(e);
+        }
+      },
+    );
+  }
+
+  /// Returns a visual representation of the provided audio-[Attachment].
+  static Widget audioAttachment(
+    Attachment e, {
+    void Function(FileAttachment)? onFileTap,
+  }) {
+    return AudioPlayerWidget(
       e,
       onPressed: () {
         if (e is FileAttachment) {
@@ -771,9 +787,14 @@ class _ChatItemWidgetState extends State<ChatItemWidget> {
           (e is LocalAttachment && (e.file.isImage || e.file.isVideo)));
     }).toList();
 
+    final List<Attachment> audio = msg.attachments.where((e) {
+      return ((e is FileAttachment && e.isAudio) ||
+          (e is LocalAttachment && e.file.isAudio));
+    }).toList();
+
     final List<Attachment> files = msg.attachments.where((e) {
-      return ((e is FileAttachment && !e.isVideo) ||
-          (e is LocalAttachment && !e.file.isImage && !e.file.isVideo));
+      return ((e is FileAttachment && !e.isVideo && !e.isAudio) ||
+          (e is LocalAttachment && !e.file.isImage && !e.file.isVideo && !e.file.isAudio));
     }).toList();
 
     final Color color = _fromMe
@@ -784,7 +805,7 @@ class _ChatItemWidgetState extends State<ChatItemWidget> {
     // Indicator whether the [_timestamp] should be displayed in a bubble above
     // the [ChatMessage] (e.g. if there's an [ImageAttachment]).
     final bool timeInBubble =
-        media.isNotEmpty && files.isEmpty && _text == null;
+        media.isNotEmpty && files.isEmpty && audio.isEmpty && _text == null;
 
     return _rounded(context, (menu, constraints) {
       final List<Widget> children = [
@@ -910,6 +931,30 @@ class _ChatItemWidgetState extends State<ChatItemWidget> {
                             .toList(),
                       ),
                     ),
+            ),
+          ),
+          SizedBox(height: (audio.isNotEmpty || files.isNotEmpty) || _text != null ? 6 : 0),
+        ],
+        if (audio.isNotEmpty) ...[
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 500),
+            opacity: _isRead || !_fromMe ? 1 : 0.55,
+            child: SelectionContainer.disabled(
+              child: Column(
+                children: [
+                  ...audio.expand(
+                    (e) => [
+                      ChatItemWidget.audioAttachment(
+                        e,
+                        onFileTap: widget.onFileTap,
+                      ),
+                      if (audio.last != e) const SizedBox(height: 6),
+                    ],
+                  ),
+                  if (_text == null && files.isEmpty)
+                    Opacity(opacity: 0, child: _timestamp(msg)),
+                ],
+              ),
             ),
           ),
           SizedBox(height: files.isNotEmpty || _text != null ? 6 : 0),

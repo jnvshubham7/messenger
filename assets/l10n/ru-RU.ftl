@@ -279,6 +279,7 @@ email_confirmation_code =
 email_confirmation_code_subject = Код подтверждения {$domain}
 err_account_not_found = Указанный аккаунт не найден
 err_account_unavailable = Этот аккаунт недоступен. Пожалуйста, повторите авторизацию.
+err_audio_source_unavailable = Источник аудио недоступен для воспроизведения.
 err_blocked = Пользователь добавил Вас в чёрный список.
 err_blocked_by = {$user} добавил Вас в чёрный список.
 err_blocked_by_multiple = Один или несколько выбранных пользователей внесли Вас в чёрный список.

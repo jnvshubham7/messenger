@@ -51,6 +51,16 @@ class AudioUtilsImpl {
   /// [StreamController]s of [AudioSource]s added in [play].
   final Map<AudioSource, StreamController<void>> _players = {};
 
+  /// [StreamController]s of [AudioSource]s added in [playControllable].
+  final Map<AudioSource, StreamController<AudioPlayerState>> _controllablePlayers = {};
+
+  /// Player instances for controllable audio.
+  final Map<AudioSource, ja.AudioPlayer> _controllableJaPlayers = {};
+  final Map<AudioSource, Player> _controllablePlayers2 = {};
+
+  /// Currently playing controllable audio source.
+  AudioSource? _currentControllableAudio;
+
   /// [AudioSpeakerKind] currently used for audio output.
   AudioSpeakerKind? _speaker;
 
@@ -189,6 +199,188 @@ class AudioUtilsImpl {
     }
 
     return controller.stream.listen((_) {});
+  }
+
+  /// Plays the provided [music] with controllable playback features.
+  ///
+  /// Returns a [Stream] that emits [AudioPlayerState] updates.
+  /// Only one controllable audio can play at a time.
+  Stream<AudioPlayerState> playControllable(AudioSource music) {
+    // Stop any currently playing controllable audio
+    if (_currentControllableAudio != null) {
+      stopControllable(_currentControllableAudio!);
+    }
+
+    StreamController<AudioPlayerState>? controller = _controllablePlayers[music];
+
+    if (controller == null) {
+      ja.AudioPlayer? jaPlayer;
+      Player? player;
+      StreamSubscription? positionSubscription;
+      StreamSubscription? durationSubscription;
+      StreamSubscription? stateSubscription;
+      
+      controller = StreamController<AudioPlayerState>.broadcast(
+        onListen: () async {
+          _currentControllableAudio = music;
+          
+          try {
+            if (_isMobile) {
+              jaPlayer = ja.AudioPlayer();
+            } else {
+              player = Player();
+            }
+          } catch (e) {
+            if (e is! TypeError) {
+              Log.error(
+                'Failed to initialize controllable Player: ${e.toString()}',
+                '$runtimeType',
+              );
+            }
+          }
+
+          AudioPlayerState currentState = AudioPlayerState(
+            isPlaying: false,
+            duration: Duration.zero,
+            position: Duration.zero,
+          );
+
+          if (_isMobile && jaPlayer != null) {
+            await jaPlayer!.setAudioSource(music.source);
+            
+            // Listen to duration changes
+            durationSubscription = jaPlayer!.durationStream.listen((duration) {
+              if (duration != null) {
+                currentState = currentState.copyWith(duration: duration);
+                controller?.add(currentState);
+              }
+            });
+
+            // Listen to position changes
+            positionSubscription = jaPlayer!.positionStream.listen((position) {
+              currentState = currentState.copyWith(position: position);
+              controller?.add(currentState);
+            });
+
+            // Listen to player state changes
+            stateSubscription = jaPlayer!.playerStateStream.listen((state) {
+              final bool isPlaying = state.playing;
+              currentState = currentState.copyWith(isPlaying: isPlaying);
+              controller?.add(currentState);
+              
+              // Auto-stop when completed
+              if (state.processingState == ja.ProcessingState.completed) {
+                stopControllable(music);
+              }
+            });
+
+          } else if (player != null) {
+            await player!.open(music.media);
+            
+            // Listen to duration changes  
+            durationSubscription = player!.stream.duration.listen((duration) {
+              currentState = currentState.copyWith(duration: duration);
+              controller?.add(currentState);
+            });
+
+            // Listen to position changes
+            positionSubscription = player!.stream.position.listen((position) {
+              currentState = currentState.copyWith(position: position);
+              controller?.add(currentState);
+            });
+
+            // Listen to playing state changes
+            stateSubscription = player!.stream.playing.listen((isPlaying) {
+              currentState = currentState.copyWith(isPlaying: isPlaying);
+              controller?.add(currentState);
+            });
+
+            // Listen to completion
+            player!.stream.completed.listen((completed) {
+              if (completed) {
+                stopControllable(music);
+              }
+            });
+          }
+
+          // Store player references for later control
+          if (jaPlayer != null) {
+            _controllableJaPlayers[music] = jaPlayer!;
+          }
+          if (player != null) {
+            _controllablePlayers2[music] = player!;
+          }
+        },
+        onCancel: () async {
+          _controllablePlayers.remove(music);
+          _controllableJaPlayers.remove(music);
+          _controllablePlayers2.remove(music);
+          if (_currentControllableAudio == music) {
+            _currentControllableAudio = null;
+          }
+          positionSubscription?.cancel();
+          durationSubscription?.cancel();
+          stateSubscription?.cancel();
+
+          Future<void>? dispose = jaPlayer?.dispose() ?? player?.dispose();
+          jaPlayer = null;
+          player = null;
+          await dispose;
+        },
+      );
+
+      _controllablePlayers[music] = controller;
+    }
+
+    return controller.stream;
+  }
+
+  /// Plays or pauses the controllable audio.
+  Future<void> togglePlayPause(AudioSource music) async {
+    final controller = _controllablePlayers[music];
+    if (controller == null) return;
+
+    if (_isMobile) {
+      final jaPlayer = _controllableJaPlayers[music];
+      if (jaPlayer != null) {
+        if (jaPlayer.playing) {
+          await jaPlayer.pause();
+        } else {
+          await jaPlayer.play();
+        }
+      }
+    } else {
+      final player = _controllablePlayers2[music];
+      if (player != null) {
+        await player.playOrPause();
+      }
+    }
+  }
+
+  /// Seeks to a specific position in the controllable audio.
+  Future<void> seekTo(AudioSource music, Duration position) async {
+    final controller = _controllablePlayers[music];
+    if (controller == null) return;
+
+    if (_isMobile) {
+      final jaPlayer = _controllableJaPlayers[music];
+      await jaPlayer?.seek(position);
+    } else {
+      final player = _controllablePlayers2[music];
+      await player?.seek(position);
+    }
+  }
+
+  /// Stops the controllable audio playback.
+  void stopControllable(AudioSource music) {
+    final controller = _controllablePlayers[music];
+    controller?.close();
+    _controllablePlayers.remove(music);
+    _controllableJaPlayers.remove(music);
+    _controllablePlayers2.remove(music);
+    if (_currentControllableAudio == music) {
+      _currentControllableAudio = null;
+    }
   }
 
   /// Sets the [speaker] to use for audio output.
@@ -333,6 +525,37 @@ class AudioUtilsImpl {
     if (speaker != _speaker) {
       _setSpeaker();
     }
+  }
+}
+
+/// State of an audio player with controllable playback.
+class AudioPlayerState {
+  const AudioPlayerState({
+    required this.isPlaying,
+    required this.duration,
+    required this.position,
+  });
+
+  /// Whether the audio is currently playing.
+  final bool isPlaying;
+
+  /// Total duration of the audio.
+  final Duration duration;
+
+  /// Current playback position.
+  final Duration position;
+
+  /// Creates a copy of this state with the given fields replaced.
+  AudioPlayerState copyWith({
+    bool? isPlaying,
+    Duration? duration,
+    Duration? position,
+  }) {
+    return AudioPlayerState(
+      isPlaying: isPlaying ?? this.isPlaying,
+      duration: duration ?? this.duration,
+      position: position ?? this.position,
+    );
   }
 }
 

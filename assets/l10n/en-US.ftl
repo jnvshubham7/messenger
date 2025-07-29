@@ -279,6 +279,7 @@ email_confirmation_code =
 email_confirmation_code_subject = {$domain} confirmation code
 err_account_not_found = Indicated account is not found
 err_account_unavailable = This account is not available. Please, log in again.
+err_audio_source_unavailable = Audio source is not available for playback.
 err_blocked = You've been added to the blocklist of this user.
 err_blocked_by = {$user} has added you to their blocklist.
 err_blocked_by_multiple = One or more of the selected users have added you to their blocklist.
